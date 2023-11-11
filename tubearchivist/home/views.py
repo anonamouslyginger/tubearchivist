@@ -38,7 +38,12 @@ from home.src.index.generic import Pagination
 from home.src.index.playlist import YoutubePlaylist
 from home.src.index.reindex import ReindexProgress
 from home.src.index.video_constants import VideoTypeEnum
-from home.src.ta.config import AppConfig, ReleaseVersion, ScheduleBuilder
+from home.src.ta.config import (
+    AppConfig,
+    DownloadConfig,
+    ReleaseVersion,
+    ScheduleBuilder,
+)
 from home.src.ta.helper import check_stylesheet, time_parser
 from home.src.ta.settings import EnvironmentSettings
 from home.src.ta.ta_redis import RedisArchivist
@@ -1004,10 +1009,12 @@ class SettingsApplicationView(MinView):
 
     def get(self, request):
         """read and display current application settings"""
+        download_config = DownloadConfig()
         context = self.get_min_context(request)
         context.update(
             {
                 "title": "Application Settings",
+                "cookie_import": download_config.get_value("cookie_import"),
                 "config": AppConfig().config,
                 "api_token": self.get_token(request),
                 "app_form": ApplicationSettingsForm(),

@@ -8,11 +8,75 @@ import json
 import re
 from random import randint
 from time import sleep
+from typing import TypedDict
 
 import requests
 from celery.schedules import crontab
 from django.conf import settings
+from home.src.es.connect import ElasticWrap
 from home.src.ta.ta_redis import RedisArchivist
+
+
+class DownloadConfigType(TypedDict, total=False):
+    """describes the download configuration"""
+
+    cookie: str
+    cookie_import: bool
+    cookie_valid: {}
+
+
+class DownloadConfig:
+    """Handle download settings for the application"""
+
+    _DEFAULT_DOWNLOAD_SETTINGS = DownloadConfigType(
+        cookie=None,
+        cookie_import=False,
+        cookie_valid=None,
+    )
+
+    def __init__(self):
+        self._config: DownloadConfigType = self.get_config()
+
+    def get_value(self, key: str):
+        """Get the given key from the download configuration
+
+        Throws a KeyError if the requested Key is not a permitted value"""
+        if key not in self._DEFAULT_DOWNLOAD_SETTINGS:
+            raise KeyError(f"Unable to read config for unknown key '{key}'")
+
+        return self._config.get(key) or self._DEFAULT_DOWNLOAD_SETTINGS.get(
+            key
+        )
+
+    def set_value(self, key: str, value):
+        """Set or replace a configuration value in the config"""
+        old = self.get_value(key)
+        self._config[key] = value
+
+        # Upsert this property (creating a record if not exists)
+        es_payload = {"doc": {"config": {key: value}}, "doc_as_upsert": True}
+        es_document_path = "ta_config/_update/download"
+        response, status = ElasticWrap(es_document_path).post(es_payload)
+        if status < 200 or status > 299:
+            raise ValueError(f"Failed storing conf value {status}: {response}")
+
+        # Dont print out the cookie
+        if key == "cookie":
+            print(f"Configuration value '{key}' changed")
+        else:
+            print(f"Configuration value '{key}' change: {old} -> {value}")
+
+    def get_config(self) -> DownloadConfigType:
+        """get config from ES"""
+        es_document_path = "ta_config/_doc/download"
+        response, status = ElasticWrap(es_document_path).get(print_error=False)
+        if status == 200 and "_source" in response.keys():
+            source = response.get("_source")
+            if "config" in source.keys():
+                return source.get("config")
+
+        # There is no config in ES
+        return {}
 
 
 class AppConfig:

@@ -10,7 +10,7 @@ from time import sleep
 from django.core.management.base import BaseCommand, CommandError
 from home.src.es.index_setup import ElasitIndexWrap
 from home.src.es.snapshot import ElasticSnapshot
-from home.src.ta.config import AppConfig, ReleaseVersion
+from home.src.ta.config import AppConfig, DownloadConfig, ReleaseVersion
 from home.src.ta.helper import clear_dl_cache
 from home.src.ta.settings import EnvironmentSettings
 from home.src.ta.ta_redis import RedisArchivist
@@ -43,6 +43,7 @@ class Command(BaseCommand):
         self._mig_index_setup()
         self._mig_snapshot_check()
         self._mig_move_users_to_es()
+        self._mig_move_cookie_to_es()
 
     def _sync_redis_state(self):
         """make sure redis gets new config.json values"""
@@ -234,3 +235,32 @@ class Command(BaseCommand):
                     "    ✓ Settings for all users migrated to ES"
                 )
             )
+
+    def _mig_move_cookie_to_es(self):
+        """migration: update from 0.4.X to 0.4.X move cookie config to ES"""
+        self.stdout.write("[MIGRATION] move cookie configuration to ES")
+        redis = RedisArchivist()
+        new_conf = DownloadConfig()
+
+        config = AppConfig().get_config()
+        if config["downloads"]["cookie_import"]:
+            try:
+                new_conf.set_value("cookie_import", True)
+
+                cookie = redis.get_message("cookie")
+                new_conf.set_value("cookie", cookie)
+                redis.del_message("cookie")
+
+                cookie_valid = redis.get_message("cookie:valid")
+                new_conf.set_value("cookie_valid", cookie_valid)
+                redis.del_message("cookie:valid")
+            except Exception as err:
+                message = "    🗙 cookie migration to ES failed"
+                self.stdout.write(self.style.ERROR(message))
+                self.stdout.write(self.style.ERROR(err))
+                sleep(60)
+                raise CommandError(message) from err
+            else:
+                self.stdout.write(
+                    self.style.SUCCESS("    ✓ Cookie settings migrated to ES")
+                )

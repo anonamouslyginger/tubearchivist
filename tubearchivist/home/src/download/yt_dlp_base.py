@@ -10,6 +10,7 @@ from http import cookiejar
 from io import StringIO
 
 import yt_dlp
+from home.src.ta.config import DownloadConfig
 from home.src.ta.settings import EnvironmentSettings
 from home.src.ta.ta_redis import RedisArchivist
 
@@ -40,7 +41,8 @@ class YtWrap:
 
     def add_cookie(self):
         """add cookie if enabled"""
-        if self.config["downloads"]["cookie_import"]:
+        cookie_import = DownloadConfig().get_value("cookie_import")
+        if cookie_import:
             cookie_io = CookieHandler(self.config).get()
             self.obs["cookiefile"] = cookie_io
 
@@ -87,11 +89,12 @@ class CookieHandler:
     def __init__(self, config):
         self.cookie_io = False
         self.config = config
+        self.download_config = DownloadConfig()
         self.cache_dir = EnvironmentSettings.CACHE_DIR
 
     def get(self):
         """get cookie io stream"""
-        cookie = RedisArchivist().get_message("cookie")
+        cookie = self.download_config.get_value("cookie")
         self.cookie_io = StringIO(cookie)
         return self.cookie_io
 
@@ -115,20 +118,15 @@ class CookieHandler:
 
     def set_cookie(self, cookie):
         """set cookie str and activate in config"""
-        RedisArchivist().set_message("cookie", cookie, save=True)
-        path = ".downloads.cookie_import"
-        RedisArchivist().set_message("config", True, path=path, save=True)
-        self.config["downloads"]["cookie_import"] = True
-        print("cookie: activated and stored in Redis")
+        self.download_config.set_value("cookie", cookie)
+        self.download_config.set_value("cookie_import", True)
+        print("cookie: activated and stored in ES")
 
-    @staticmethod
-    def revoke():
+    def revoke(self):
         """revoke cookie"""
-        RedisArchivist().del_message("cookie")
-        RedisArchivist().del_message("cookie:valid")
-        RedisArchivist().set_message(
-            "config", False, path=".downloads.cookie_import"
-        )
+        self.download_config.set_value("cookie", None)
+        self.download_config.set_value("cookie_valid", None)
+        self.download_config.set_value("cookie_import", False)
         print("cookie: revoked")
 
     def validate(self):
@@ -145,7 +143,7 @@ class CookieHandler:
         # update in redis to avoid expiring
         modified = validator.obs["cookiefile"].getvalue()
         if modified:
-            RedisArchivist().set_message("cookie", modified)
+            self.download_config.set_value("cookie", modified)
 
         if not response:
             mess_dict = {
@@ -161,8 +159,7 @@ class CookieHandler:
 
         return response
 
-    @staticmethod
-    def store_validation(response):
+    def store_validation(self, response):
         """remember last validation"""
         now = datetime.now()
         message = {
@@ -170,4 +167,4 @@ class CookieHandler:
             "validated": int(now.timestamp()),
             "validated_str": now.strftime("%Y-%m-%d %H:%M"),
         }
-        RedisArchivist().set_message("cookie:valid", message)
+        self.download_config.set_value("cookie_valid", message)

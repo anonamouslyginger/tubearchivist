@@ -18,7 +18,6 @@
         "subtitle_index": false,
         "comment_max": false,
         "comment_sort": "top",
-        "cookie_import": false,
         "throttledratelimit": false,
         "extractor_lang": false,
         "integrate_ryd": false,

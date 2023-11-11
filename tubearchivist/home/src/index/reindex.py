@@ -18,7 +18,7 @@ from home.src.index.channel import YoutubeChannel
 from home.src.index.comments import Comments
 from home.src.index.playlist import YoutubePlaylist
 from home.src.index.video import YoutubeVideo
-from home.src.ta.config import AppConfig
+from home.src.ta.config import AppConfig, DownloadConfig
 from home.src.ta.settings import EnvironmentSettings
 from home.src.ta.ta_redis import RedisQueue
 
@@ -379,7 +379,8 @@ class Reindex(ReindexBase):
 
     def cookie_is_valid(self):
         """return true if cookie is enabled and valid"""
-        if not self.config["downloads"]["cookie_import"]:
+        cookie_import = DownloadConfig().get_value("cookie_import")
+        if not cookie_import:
             # is not activated, continue reindex
             return True
 

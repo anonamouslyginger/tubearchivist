@@ -18,7 +18,7 @@ from home.src.index.generic import Pagination
 from home.src.index.playlist import YoutubePlaylist
 from home.src.index.reindex import ReindexProgress
 from home.src.index.video import SponsorBlock, YoutubeVideo
-from home.src.ta.config import AppConfig, ReleaseVersion
+from home.src.ta.config import AppConfig, DownloadConfig, ReleaseVersion
 from home.src.ta.settings import EnvironmentSettings
 from home.src.ta.ta_redis import RedisArchivist
 from home.src.ta.task_manager import TaskCommand, TaskManager
@@ -1031,10 +1031,12 @@ class CookieView(ApiBaseView):
     def get(request):
         """handle get request"""
         # pylint: disable=unused-argument
-        config = AppConfig().config
-        valid = RedisArchivist().get_message("cookie:valid")
-        response = {"cookie_enabled": config["downloads"]["cookie_import"]}
-        response.update(valid)
+        download_config = DownloadConfig()
+        valid = download_config.get_value("cookie_valid")
+        cookie_import = download_config.get_value("cookie_import")
+        response = {"cookie_enabled": cookie_import}
+        if valid:
+            response.update(valid)
 
         return Response(response)
 
